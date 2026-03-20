@@ -5,7 +5,7 @@ import { auth } from '../firebase'
 import { setProfile, getProfile } from '../db'
 import { LogOut, Save } from 'lucide-react'
 
-export default function SettingsPage({ uid, user, habits, onEdit, onDelete }) {
+export default function SettingsPage({ uid, user, habits, onEdit, onDelete, onIdentityChange }) {
   const [identity, setIdentity] = useState('')
   const [saved, setSaved] = useState(false)
 
@@ -15,6 +15,7 @@ export default function SettingsPage({ uid, user, habits, onEdit, onDelete }) {
 
   const saveIdentity = async () => {
     await setProfile(uid, { identity })
+    if (onIdentityChange) onIdentityChange(identity)
     setSaved(true)
     setTimeout(() => setSaved(false), 2000)
   }

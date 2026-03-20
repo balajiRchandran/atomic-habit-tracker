@@ -708,3 +708,14 @@ body {
   font-family: var(--font-mono); font-size: 12px;
   background: var(--paper-2); padding: 1px 5px; border-radius: 4px;
 }
+
+/* ── Drag-over highlight ────────────────────────────────────── */
+.habit-row[draggable]:hover { cursor: grab; }
+.habit-row[draggable]:active { cursor: grabbing; opacity: 0.85; }
+
+/* ── Stat card sub-text ─────────────────────────────────────── */
+.stat-card .stat-sub {
+  font-size: 11px;
+  color: var(--ink-muted);
+  margin-top: 4px;
+}
