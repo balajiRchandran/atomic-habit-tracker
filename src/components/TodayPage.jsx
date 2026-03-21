@@ -274,16 +274,6 @@ function HabitRow({ habit, log, streak, consistency, selectedDay, onToggle, onMe
         <GripVertical size={16}/>
       </div>
 
-      {/* Checkbox */}
-      {!habit.isMeasured && (
-        <div className={`habit-check ${checkClass}`}
-          onClick={isActive ? onToggle : undefined}
-          style={{ cursor: isActive ? 'pointer' : 'default', flexShrink:0 }}
-          title={isActive ? (log?.done ? 'Mark undone' : 'Mark done') : 'Not started yet'}
-        >
-          {log?.done && <Check size={14} color="white" strokeWidth={3}/>}
-        </div>
-      )}
 
       {/* Info */}
       <div className="habit-info" style={{ flex:1, minWidth:0 }}>
@@ -323,6 +313,17 @@ function HabitRow({ habit, log, streak, consistency, selectedDay, onToggle, onMe
         )}
       </div>
 
+      {/* Checkbox */}
+      {!habit.isMeasured && (
+        <div className={`habit-check ${checkClass}`}
+          onClick={isActive ? onToggle : undefined}
+          style={{ cursor: isActive ? 'pointer' : 'default', flexShrink:0 }}
+          title={isActive ? (log?.done ? 'Mark undone' : 'Mark done') : 'Not started yet'}
+        >
+          {log?.done && <Check size={14} color="white" strokeWidth={3}/>}
+        </div>
+      )}
+
       {/* Measurement input */}
       {habit.isMeasured && isActive && (
         <div className="measurement-input-wrap">
@@ -353,13 +354,13 @@ function HabitRow({ habit, log, streak, consistency, selectedDay, onToggle, onMe
         >
           <MessageSquare size={14}/>
         </button>
-        <button className="btn btn-ghost btn-icon btn-sm" onClick={onEdit} title="Edit">
+        {/* <button className="btn btn-ghost btn-icon btn-sm" onClick={onEdit} title="Edit">
           <Pencil size={14}/>
         </button>
         <button className="btn btn-ghost btn-icon btn-sm" onClick={onDelete} title="Delete"
           style={{ color:'var(--bad)' }}>
           <Trash2 size={14}/>
-        </button>
+        </button> */}
       </div>
     </div>
   )

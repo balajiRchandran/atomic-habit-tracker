@@ -91,7 +91,7 @@ function Dashboard({ habits, logs, onDrill }) {
           {Array.from({ length: startOffset }).map((_,i) => <div key={'e'+i}/>)}
           {calData.map(({ str, dayNum, status }) => (
             <div key={str} style={{
-              aspectRatio:'1', borderRadius:6, display:'flex',
+              aspectRatio:'2', borderRadius:6, display:'flex',
               alignItems:'center', justifyContent:'center',
               fontSize:11, fontWeight:700,
               background:
