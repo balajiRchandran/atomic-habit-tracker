@@ -81,17 +81,17 @@ function Dashboard({ habits, logs, onDrill }) {
           {format(new Date(), 'MMMM yyyy')} — perfect days
         </div>
         {/* Day labels */}
-        <div style={{ display:'grid', gridTemplateColumns:'repeat(7,1fr)', gap:4, marginBottom:4 }}>
+        <div style={{ display:'grid', gridTemplateColumns:'repeat(7,36px)', gap:4, marginBottom:4 }}>
           {['Sun','Mon','Tue','Wed','Thu','Fri','Sat'].map(d => (
             <div key={d} style={{ textAlign:'center', fontSize:10, color:'var(--ink-muted)', fontWeight:700 }}>{d}</div>
           ))}
         </div>
         {/* Calendar grid */}
-        <div style={{ display:'grid', gridTemplateColumns:'repeat(7,1fr)', gap:4 }}>
+        <div style={{ display:'grid', gridTemplateColumns:'repeat(7,36px)', gap:4 }}>
           {Array.from({ length: startOffset }).map((_,i) => <div key={'e'+i}/>)}
           {calData.map(({ str, dayNum, status }) => (
             <div key={str} style={{
-              aspectRatio:'2', borderRadius:6, display:'flex',
+              aspectRatio:'1', borderRadius:6, display:'flex',
               alignItems:'center', justifyContent:'center',
               fontSize:11, fontWeight:700,
               background:

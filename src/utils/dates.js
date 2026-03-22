@@ -26,7 +26,7 @@ export const isSuccess = (habit, log) => {
   if (!log) return false
   if (!habit.isMeasured) {
     // simple checkbox — for bad habits, NOT done = success
-    return habit.type === 'bad' ? !log.done : !!log.done
+    return log.done
   }
   // measured habit
   const val = log.value

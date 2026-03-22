@@ -90,8 +90,8 @@ export default function TodayPage({ uid, habits, logs, onEdit, onDelete, identit
     dragOver.current = null
   }
 
-  const dailyHabits  = habits.filter(h => h.frequency !== 'weekly')
-  const weeklyHabits = habits.filter(h => h.frequency === 'weekly')
+  const dailyHabits  = habits.filter(h => h.frequency !== 'weekly' && (h.startDate || todayStr()) <= selectedDay)
+  const weeklyHabits = habits.filter(h => h.frequency === 'weekly'  && (h.startDate || todayStr()) <= selectedDay)
 
   // For selected day's progress bar — only show habits active on that day
   const activeHabits = habits.filter(h => (h.startDate || todayStr()) <= selectedDay)
@@ -110,7 +110,7 @@ export default function TodayPage({ uid, habits, logs, onEdit, onDelete, identit
         }}>
           <Star size={16} style={{ color: 'var(--accent-2)', flexShrink: 0 }} />
           <span style={{ fontFamily: 'var(--font-display)', fontStyle: 'italic', fontSize: 15 }}>
-            "I am someone who {identity}"
+            "{identity}"
           </span>
         </div>
       )}
@@ -252,7 +252,7 @@ function HabitRow({ habit, log, streak, consistency, selectedDay, onToggle, onMe
 
   // For checkbox habits: clicking toggles done
   // done means: good habit = did it, bad habit = slipped (red)
-  const checkClass = log?.done ? (isBad ? 'checked-bad' : 'checked') : ''
+  const checkClass = log?.done ? 'checked' : ''
 
   const handleNoteBlur = () => { onNote(noteText) }
 
@@ -314,7 +314,7 @@ function HabitRow({ habit, log, streak, consistency, selectedDay, onToggle, onMe
       </div>
 
       {/* Checkbox */}
-      {!habit.isMeasured && (
+      {!habit.isMeasured && isActive && (
         <div className={`habit-check ${checkClass}`}
           onClick={isActive ? onToggle : undefined}
           style={{ cursor: isActive ? 'pointer' : 'default', flexShrink:0 }}
