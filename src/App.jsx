@@ -2,7 +2,6 @@
 import { useState, useEffect, useMemo } from 'react'
 import { onAuthStateChanged } from 'firebase/auth'
 import { auth } from './firebase'
-// Email/password auth — no Google dependency
 import { subscribeHabits, subscribeLogs, addHabit, updateHabit, deleteHabit, getProfile } from './db'
 import AuthScreen from './components/AuthScreen'
 import TodayPage from './components/TodayPage'
@@ -11,6 +10,8 @@ import SettingsPage from './components/SettingsPage'
 import JournalPage from './components/JournalPage'
 import HabitModal from './components/HabitModal'
 import { CalendarCheck, BarChart2, Settings, Plus, BookOpen } from 'lucide-react'
+import { todayStr } from './utils/dates'
+import { isSuccess, isFailed } from './utils/dates'
 
 const NAV = [
   { id: 'today', label: 'Today', Icon: CalendarCheck },
@@ -27,13 +28,14 @@ export default function App() {
   const [identity, setIdentity] = useState('')
   const [modal, setModal] = useState(null)
   const [confirm, setConfirm] = useState(null)
+  // Lift selectedDay so nav badge stays in sync
+  const [selectedDay, setSelectedDay] = useState(todayStr())
 
   useEffect(() => onAuthStateChanged(auth, u => setUser(u)), [])
 
   useEffect(() => {
     if (!user) return
     const unsub1 = subscribeHabits(user.uid, raw => {
-      // Sort by order field, then createdAt
       const sorted = [...raw].sort((a, b) => {
         if (a.order != null && b.order != null) return a.order - b.order
         if (a.order != null) return -1
@@ -65,6 +67,14 @@ export default function App() {
       setTimeout(() => setConfirm(c => c?.id === habit.id ? null : c), 3000)
     }
   }
+
+  // Badge count: untracked habits on selectedDay
+  const badgeCount = useMemo(() => {
+    const activeHabits = habits.filter(h => (h.startDate || todayStr()) <= selectedDay)
+    const dayLogs = {}
+    logs.forEach(l => { if (l.date === selectedDay) dayLogs[l.habitId] = l })
+    return activeHabits.filter(h => !isSuccess(h, dayLogs[h.id]) && !isFailed(h, dayLogs[h.id])).length
+  }, [habits, logs, selectedDay])
 
   if (user === undefined) {
     return (
@@ -100,18 +110,9 @@ export default function App() {
               onClick={() => setPage(id)}
             >
               <Icon size={16} /> {label}
-              {id === 'today' && (() => {
-                const today = new Date().toISOString().slice(0, 10)
-                const activeToday = habits.filter(h => (h.startDate || today) <= today)
-                const loggedToday = logs.filter(l => l.date === today)
-                const untracked = activeToday.filter(h => {
-                  const log = loggedToday.find(l => l.habitId === h.id)
-                  return !log?.done && !log?.failed
-                }).length
-                return untracked > 0
-                  ? <span className="nav-badge">{untracked}</span>
-                  : null
-              })()}
+              {id === 'today' && badgeCount > 0 && (
+                <span className="nav-badge">{badgeCount}</span>
+              )}
             </div>
           ))}
 
@@ -144,7 +145,7 @@ export default function App() {
           <div>
             <h1 className="page-title">{pageTitle}</h1>
             <p className="page-subtitle">
-              {page === 'today' && 'Check in on your habits'}
+              {page === 'today' && (selectedDay === todayStr() ? "Check in on your habits" : `Viewing ${selectedDay}`)}
               {page === 'progress' && 'Your consistency over time'}
               {page === 'journal' && 'Your habit notes & memories'}
               {page === 'settings' && 'Manage habits and account'}
@@ -169,10 +170,14 @@ export default function App() {
         )}
 
         {page === 'today' && (
-          <TodayPage uid={user.uid} habits={habits} logs={logs}
+          <TodayPage
+            uid={user.uid} habits={habits} logs={logs}
             identity={identity}
             onEdit={h => setModal({ habit: h })}
-            onDelete={handleDeleteHabit} />
+            onDelete={handleDeleteHabit}
+            selectedDay={selectedDay}
+            onDayChange={setSelectedDay}
+          />
         )}
         {page === 'progress' && <ProgressPage habits={habits} logs={logs} />}
         {page === 'journal' && <JournalPage habits={habits} logs={logs} />}
@@ -191,7 +196,20 @@ export default function App() {
             className={`mobile-nav-item ${page === id ? 'active' : ''}`}
             onClick={() => setPage(id)}
           >
-            <Icon size={20} /> {label}
+            <Icon size={20} />
+            <span style={{ position: 'relative' }}>
+              {label}
+              {id === 'today' && badgeCount > 0 && (
+                <span style={{
+                  position: 'absolute', top: -8, right: -10,
+                  background: 'var(--accent)', color: 'white',
+                  fontSize: 9, fontWeight: 700, padding: '1px 4px',
+                  borderRadius: 8, fontFamily: 'var(--font-mono)',
+                }}>
+                  {badgeCount}
+                </span>
+              )}
+            </span>
           </div>
         ))}
         <div className="mobile-nav-item" onClick={() => setModal({})} style={{ color: 'var(--accent-2)' }}>

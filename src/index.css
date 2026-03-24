@@ -735,3 +735,60 @@ body {
   color: var(--ink-muted);
   margin-top: 4px;
 }
+
+/* ── Failed habit row enhancements ─────────────────────────── */
+/* Add to src/index.css */
+
+/* Failed row red left accent override */
+.habit-row.failed-state {
+  background: #fef5f4 !important;
+  border-color: #f5c5be !important;
+  box-shadow: 0 2px 12px rgba(176,48,32,0.12) !important;
+}
+
+/* 3-state cycle button */
+.habit-cycle-btn {
+  width: 34px; height: 34px;
+  border-radius: 50%;
+  border: 2px solid var(--paper-3);
+  background: white;
+  cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 13px; font-weight: 900;
+  transition: all 0.18s ease;
+  padding: 0;
+  flex-shrink: 0;
+}
+.habit-cycle-btn:hover { transform: scale(1.1); }
+.habit-cycle-btn.state-done {
+  background: var(--good);
+  border-color: var(--good);
+  color: white;
+}
+.habit-cycle-btn.state-failed {
+  background: var(--bad);
+  border-color: var(--bad);
+  color: white;
+}
+
+/* Toggle hint pill */
+.toggle-hint {
+  font-size: 11px;
+  color: var(--ink-muted);
+  display: flex; align-items: center; gap: 6px;
+  padding: 5px 12px;
+  background: var(--paper-2);
+  border-radius: 20px;
+  width: fit-content;
+  margin-bottom: 16px;
+  user-select: none;
+}
+
+/* Day strip dot indicators */
+.date-chip .day-dot {
+  width: 5px; height: 5px;
+  border-radius: 50%;
+  display: inline-block;
+  margin-top: 2px;
+}
+

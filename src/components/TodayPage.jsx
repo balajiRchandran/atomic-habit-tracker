@@ -1,11 +1,13 @@
 // src/components/TodayPage.jsx
 import { useState, useMemo, useRef } from 'react'
 import { format, subDays } from 'date-fns'
-import { Check, Flame, Pencil, Trash2, GripVertical, MessageSquare, ChevronDown, ChevronUp, Star, X } from 'lucide-react'
+import { Flame, GripVertical, MessageSquare, Star, ChevronRight } from 'lucide-react'
 import { setLog, updateHabit } from '../db'
-import { dateStr, friendlyDate, computeStreak, computeWeeklyStreak,
-         consistencyScore, weeklyConsistencyScore, isSuccess,
-         computePerfectDays, todayStr, isFailed } from '../utils/dates'
+import {
+  dateStr, friendlyDate, computeStreak, computeWeeklyStreak,
+  consistencyScore, weeklyConsistencyScore, isSuccess,
+  computePerfectDays, todayStr, isFailed,
+} from '../utils/dates'
 
 function buildDayStrip() {
   return Array.from({ length: 7 }, (_, i) => {
@@ -14,15 +16,18 @@ function buildDayStrip() {
   })
 }
 
-export default function TodayPage({ uid, habits, logs, onEdit, onDelete, identity }) {
-  const [selectedDay, setSelectedDay] = useState(todayStr())
+export default function TodayPage({ uid, habits, logs, onEdit, onDelete, identity, selectedDay, onDayChange }) {
+  // fallback if not provided (for backwards compat)
+  const [localDay, setLocalDay] = useState(todayStr())
+  const activeDay = selectedDay ?? localDay
+  const setActiveDay = onDayChange ?? setLocalDay
   const dayStrip = useMemo(buildDayStrip, [])
 
   const logMap = useMemo(() => {
     const m = {}
-    logs.forEach(l => { if (l.date === selectedDay) m[l.habitId] = l })
+    logs.forEach(l => { if (l.date === activeDay) m[l.habitId] = l })
     return m
-  }, [logs, selectedDay])
+  }, [logs, activeDay])
 
   const streakMap = useMemo(() => {
     const m = {}
@@ -44,39 +49,59 @@ export default function TodayPage({ uid, habits, logs, onEdit, onDelete, identit
     return m
   }, [habits, logs])
 
-  const perfectDays = useMemo(() =>
-    computePerfectDays(habits, logs), [habits, logs])
+  const perfectDays = useMemo(() => computePerfectDays(habits, logs), [habits, logs])
 
-  const toggle = async (habit) => {
+  // Cycle: pending → done → failed → pending
+  const cycleState = async (habit) => {
     const current = logMap[habit.id]
-    const done = !current?.done
-    await setLog(uid, habit.id, selectedDay, { done, value: current?.value ?? null, note: current?.note ?? '' })
-  }
+    const currentlyDone = isSuccess(habit, current)
+    const currentlyFailed = isFailed(habit, current)
 
-  const markFailed = async (habit) => {
-  const current = logMap[habit.id]
-  const alreadyFailed = current?.failed
-  await setLog(uid, habit.id, selectedDay, {
-    done: false,
-    value: current?.value ?? null,
-    note: current?.note ?? '',
-    failed: !alreadyFailed,
-  })
-}
+    let newDone = false
+    let newFailed = false
+
+    if (!currentlyDone && !currentlyFailed) {
+      // pending → done
+      newDone = true
+      newFailed = false
+    } else if (currentlyDone) {
+      // done → failed
+      newDone = false
+      newFailed = true
+    } else {
+      // failed → pending
+      newDone = false
+      newFailed = false
+    }
+
+    await setLog(uid, habit.id, activeDay, {
+      done: newDone,
+      value: current?.value ?? null,
+      note: current?.note ?? '',
+      failed: newFailed,
+    })
+  }
 
   const setMeasure = async (habit, value) => {
     const current = logMap[habit.id]
     const numVal = value === '' ? null : Number(value)
     const done = numVal != null && isSuccess(habit, { value: numVal })
-    await setLog(uid, habit.id, selectedDay, { done, value: numVal, note: current?.note ?? '' })
+    const failed = numVal != null && !done && habit.goal != null
+    await setLog(uid, habit.id, activeDay, {
+      done,
+      value: numVal,
+      note: current?.note ?? '',
+      failed,
+    })
   }
 
   const setNote = async (habit, note) => {
     const current = logMap[habit.id]
-    await setLog(uid, habit.id, selectedDay, {
+    await setLog(uid, habit.id, activeDay, {
       done: current?.done ?? false,
       value: current?.value ?? null,
       note,
+      failed: current?.failed ?? false,
     })
   }
 
@@ -86,29 +111,27 @@ export default function TodayPage({ uid, habits, logs, onEdit, onDelete, identit
 
   const handleDragStart = (idx) => { dragItem.current = idx }
   const handleDragEnter = (idx) => { dragOver.current = idx }
-  const handleDragEnd   = async () => {
+  const handleDragEnd = async () => {
     const from = dragItem.current
-    const to   = dragOver.current
+    const to = dragOver.current
     if (from === null || to === null || from === to) return
-
     const reordered = [...habits]
     const [moved] = reordered.splice(from, 1)
     reordered.splice(to, 0, moved)
-
-    // Save new order as `order` field
     await Promise.all(reordered.map((h, i) => updateHabit(uid, h.id, { order: i })))
     dragItem.current = null
     dragOver.current = null
   }
 
-  const dailyHabits  = habits.filter(h => h.frequency !== 'weekly' && (h.startDate || todayStr()) <= selectedDay)
-  const weeklyHabits = habits.filter(h => h.frequency === 'weekly'  && (h.startDate || todayStr()) <= selectedDay)
+  const dailyHabits = habits.filter(h => h.frequency !== 'weekly' && (h.startDate || todayStr()) <= activeDay)
+  const weeklyHabits = habits.filter(h => h.frequency === 'weekly' && (h.startDate || todayStr()) <= activeDay)
+  const activeHabits = habits.filter(h => (h.startDate || todayStr()) <= activeDay)
 
-  // For selected day's progress bar — only show habits active on that day
-  const activeHabits = habits.filter(h => (h.startDate || todayStr()) <= selectedDay)
-  const doneCount    = activeHabits.filter(h => isSuccess(h, logMap[h.id])).length
-  const pct          = activeHabits.length ? Math.round((doneCount / activeHabits.length) * 100) : 0
-  const isPerfect    = activeHabits.length > 0 && dailyHabits.filter(h => (h.startDate||todayStr()) <= selectedDay).every(h => isSuccess(h, logMap[h.id]))
+  const doneCount = activeHabits.filter(h => isSuccess(h, logMap[h.id])).length
+  const failedCount = activeHabits.filter(h => isFailed(h, logMap[h.id])).length
+  const pendingCount = activeHabits.filter(h => !isSuccess(h, logMap[h.id]) && !isFailed(h, logMap[h.id])).length
+  const pct = activeHabits.length ? Math.round((doneCount / activeHabits.length) * 100) : 0
+  const isToday = activeDay === todayStr()
 
   return (
     <div>
@@ -149,45 +172,116 @@ export default function TodayPage({ uid, habits, logs, onEdit, onDelete, identit
 
       {/* Day strip */}
       <div className="date-strip">
-        {dayStrip.map(({ date, str }) => (
-          <div key={str}
-            className={`date-chip ${selectedDay === str ? 'active' : ''}`}
-            onClick={() => setSelectedDay(str)}
-          >
-            <span className="day-num">{format(date, 'd')}</span>
-            <span>{format(date, 'EEE')}</span>
-          </div>
-        ))}
+        {dayStrip.map(({ date, str }) => {
+          const dayActive = habits.filter(h => (h.startDate || todayStr()) <= str)
+          const dayLogs = {}
+          logs.forEach(l => { if (l.date === str) dayLogs[l.habitId] = l })
+          const dayDone = dayActive.filter(h => isSuccess(h, dayLogs[h.id])).length
+          const dayFailed = dayActive.filter(h => isFailed(h, dayLogs[h.id])).length
+          const isPast = str < todayStr()
+          const allDone = dayActive.length > 0 && dayDone === dayActive.length
+
+          return (
+            <div key={str}
+              className={`date-chip ${activeDay === str ? 'active' : ''}`}
+              onClick={() => setActiveDay(str)}
+            >
+              <span className="day-num">{format(date, 'd')}</span>
+              <span>{format(date, 'EEE')}</span>
+              {/* Day indicator dots */}
+              {dayActive.length > 0 && str !== todayStr() && (
+                <span style={{
+                  width: 5, height: 5, borderRadius: '50%', marginTop: 2,
+                  background: allDone ? 'var(--good)' : dayFailed > 0 ? 'var(--bad)' : 'var(--paper-3)',
+                  display: 'inline-block',
+                  opacity: activeDay === str ? 0.7 : 1,
+                }} />
+              )}
+            </div>
+          )
+        })}
       </div>
 
-      {/* Progress bar */}
+      {/* Progress bar + stats */}
       {activeHabits.length > 0 && (
-        <div style={{ display: 'flex', gap: 16, marginBottom: 20, flexWrap: 'wrap' }}>
-          {[
-            { label: 'Done', count: activeHabits.filter(h => isSuccess(h, logMap[h.id])).length, color: 'var(--good)' },
-            { label: 'Failed', count: activeHabits.filter(h => isFailed(h, logMap[h.id])).length, color: 'var(--bad)' },
-            { label: 'Pending', count: activeHabits.filter(h => !isSuccess(h, logMap[h.id]) && !isFailed(h, logMap[h.id])).length, color: 'var(--ink-muted)' },
-          ].map(({ label, count, color }) => (
-            <div key={label} style={{ fontSize: 13, fontWeight: 700, color }}>
-              {label}: {count}
+        <div style={{ marginBottom: 24 }}>
+          {/* Progress bar */}
+          <div style={{
+            height: 6, background: 'var(--paper-3)',
+            borderRadius: 3, marginBottom: 12, overflow: 'hidden',
+          }}>
+            <div style={{
+              height: '100%',
+              width: `${pct}%`,
+              background: pct === 100 ? 'var(--good)' : 'var(--accent)',
+              borderRadius: 3,
+              transition: 'width 0.4s ease',
+            }} />
+          </div>
+          <div style={{ display: 'flex', gap: 20, alignItems: 'center' }}>
+            <span style={{ fontSize: 12, fontWeight: 700, color: 'var(--ink-muted)' }}>
+              {pct}% complete
+            </span>
+            <div style={{ display: 'flex', gap: 14, marginLeft: 'auto' }}>
+              {doneCount > 0 && (
+                <span style={{ fontSize: 12, fontWeight: 700, color: 'var(--good)', display: 'flex', alignItems: 'center', gap: 4 }}>
+                  <span style={{ width: 8, height: 8, borderRadius: '50%', background: 'var(--good)', display: 'inline-block' }} />
+                  {doneCount} done
+                </span>
+              )}
+              {failedCount > 0 && (
+                <span style={{ fontSize: 12, fontWeight: 700, color: 'var(--bad)', display: 'flex', alignItems: 'center', gap: 4 }}>
+                  <span style={{ width: 8, height: 8, borderRadius: '50%', background: 'var(--bad)', display: 'inline-block' }} />
+                  {failedCount} failed
+                </span>
+              )}
+              {pendingCount > 0 && (
+                <span style={{ fontSize: 12, fontWeight: 700, color: 'var(--ink-muted)', display: 'flex', alignItems: 'center', gap: 4 }}>
+                  <span style={{ width: 8, height: 8, borderRadius: '50%', background: 'var(--paper-3)', display: 'inline-block' }} />
+                  {pendingCount} pending
+                </span>
+              )}
             </div>
-          ))}
+          </div>
+        </div>
+      )}
+
+      {/* Toggle hint */}
+      {activeHabits.length > 0 && (
+        <div style={{
+          fontSize: 11, color: 'var(--ink-muted)', marginBottom: 16,
+          display: 'flex', alignItems: 'center', gap: 6,
+          padding: '6px 12px', background: 'var(--paper-2)',
+          borderRadius: 20, width: 'fit-content',
+        }}>
+          <span>Tap circle:</span>
+          <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+            <span style={{ width: 10, height: 10, borderRadius: '50%', border: '2px solid var(--paper-3)', display: 'inline-block' }} />
+            <span style={{ fontSize: 10 }}>→</span>
+            <span style={{ width: 10, height: 10, borderRadius: '50%', background: 'var(--good)', display: 'inline-block' }} />
+            <span style={{ fontSize: 10 }}>→</span>
+            <span style={{ width: 10, height: 10, borderRadius: '50%', background: 'var(--bad)', display: 'inline-block' }} />
+            <span style={{ fontSize: 10 }}>→ repeat</span>
+          </span>
         </div>
       )}
 
       {/* Daily habits */}
       {dailyHabits.length > 0 && (
         <>
-          <div style={{ fontSize:10, fontWeight:700, letterSpacing:'0.12em', textTransform:'uppercase', color:'var(--ink-muted)', marginBottom:10 }}>
+          <div style={{
+            fontSize: 10, fontWeight: 700, letterSpacing: '0.12em',
+            textTransform: 'uppercase', color: 'var(--ink-muted)', marginBottom: 10,
+          }}>
             Daily
           </div>
-          <div className="habits-list" style={{ marginBottom:24 }}>
+          <div className="habits-list" style={{ marginBottom: 24 }}>
             {dailyHabits.map((h, idx) => (
               <HabitRow key={h.id} habit={h} log={logMap[h.id]}
                 streak={streakMap[h.id] ?? 0}
                 consistency={consistencyMap[h.id] ?? 0}
-                selectedDay={selectedDay}
-                onToggle={() => toggle(h)}
+                selectedDay={activeDay}
+                onCycle={() => cycleState(h)}
                 onMeasure={v => setMeasure(h, v)}
                 onNote={n => setNote(h, n)}
                 onEdit={() => onEdit(h)}
@@ -196,7 +290,6 @@ export default function TodayPage({ uid, habits, logs, onEdit, onDelete, identit
                 onDragStart={() => handleDragStart(idx)}
                 onDragEnter={() => handleDragEnter(idx)}
                 onDragEnd={handleDragEnd}
-                onFail={() => markFailed(h)}
               />
             ))}
           </div>
@@ -206,7 +299,10 @@ export default function TodayPage({ uid, habits, logs, onEdit, onDelete, identit
       {/* Weekly habits */}
       {weeklyHabits.length > 0 && (
         <>
-          <div style={{ fontSize:10, fontWeight:700, letterSpacing:'0.12em', textTransform:'uppercase', color:'var(--ink-muted)', marginBottom:10 }}>
+          <div style={{
+            fontSize: 10, fontWeight: 700, letterSpacing: '0.12em',
+            textTransform: 'uppercase', color: 'var(--ink-muted)', marginBottom: 10,
+          }}>
             Weekly
           </div>
           <div className="habits-list">
@@ -214,8 +310,8 @@ export default function TodayPage({ uid, habits, logs, onEdit, onDelete, identit
               <HabitRow key={h.id} habit={h} log={logMap[h.id]}
                 streak={streakMap[h.id] ?? 0}
                 consistency={consistencyMap[h.id] ?? 0}
-                selectedDay={selectedDay}
-                onToggle={() => toggle(h)}
+                selectedDay={activeDay}
+                onCycle={() => cycleState(h)}
                 onMeasure={v => setMeasure(h, v)}
                 onNote={n => setNote(h, n)}
                 onEdit={() => onEdit(h)}
@@ -224,7 +320,6 @@ export default function TodayPage({ uid, habits, logs, onEdit, onDelete, identit
                 onDragStart={() => handleDragStart(dailyHabits.length + idx)}
                 onDragEnter={() => handleDragEnter(dailyHabits.length + idx)}
                 onDragEnd={handleDragEnd}
-                onFail={() => markFailed(h)}
               />
             ))}
           </div>
@@ -241,96 +336,177 @@ export default function TodayPage({ uid, habits, logs, onEdit, onDelete, identit
   )
 }
 
-function HabitRow({ habit, log, streak, consistency, selectedDay, onToggle, onMeasure, onNote, onEdit, onDelete, onDragStart, onDragEnter, onDragEnd, onFail }) {
+function HabitRow({ habit, log, streak, consistency, selectedDay, onCycle, onMeasure, onNote, onEdit, onDelete, onDragStart, onDragEnter, onDragEnd }) {
   const [showNote, setShowNote] = useState(false)
   const [noteText, setNoteText] = useState(log?.note || '')
 
-  // Sync note from log changes
   useMemo(() => { setNoteText(log?.note || '') }, [log?.note])
 
   const success = isSuccess(habit, log)
-  const isBad   = habit.type === 'bad'
+  const failed = isFailed(habit, log)
   const isActive = (habit.startDate || todayStr()) <= selectedDay
-
-  // For checkbox habits: clicking toggles done
-  // done means: good habit = did it, bad habit = slipped (red)
-  const checkClass = log?.done ? 'checked' : ''
-
-  const handleNoteBlur = () => { onNote(noteText) }
 
   const goalHint = habit.isMeasured && habit.goal != null
     ? `${habit.goalDirection === 'atleast' ? '≥' : '≤'} ${habit.goal} ${habit.unit}`
     : null
 
+  // Determine visual state
+  const state = success ? 'done' : failed ? 'failed' : 'pending'
+
+  const stateStyles = {
+    done: {
+      rowBg: '#f7fdf9',
+      rowBorder: 'var(--paper-2)',
+      leftBorder: 'var(--good)',
+      checkBg: 'var(--good)',
+      checkBorder: 'var(--good)',
+      checkColor: 'white',
+      boxShadow: 'var(--shadow)',
+    },
+    failed: {
+      rowBg: '#fef5f4',
+      rowBorder: '#f5c5be',
+      leftBorder: 'var(--bad)',
+      checkBg: 'var(--bad)',
+      checkBorder: 'var(--bad)',
+      checkColor: 'white',
+      boxShadow: '0 2px 12px rgba(176,48,32,0.12)',
+    },
+    pending: {
+      rowBg: 'white',
+      rowBorder: 'var(--paper-3)',
+      leftBorder: 'var(--paper-3)',
+      checkBg: 'white',
+      checkBorder: 'var(--paper-3)',
+      checkColor: 'transparent',
+      boxShadow: 'var(--shadow)',
+    },
+  }
+
+  const s = stateStyles[state]
+
   return (
     <div
-      className={`habit-row type-${habit.type} ${success ? 'completed' : ''}`}
+      className="habit-row"
       draggable
       onDragStart={onDragStart}
       onDragEnter={onDragEnter}
       onDragEnd={onDragEnd}
       onDragOver={e => e.preventDefault()}
+      style={{
+        background: s.rowBg,
+        borderColor: s.rowBorder,
+        borderLeft: `4px solid ${s.leftBorder}`,
+        boxShadow: s.boxShadow,
+        transition: 'all 0.2s ease',
+      }}
     >
       {/* Drag handle */}
-      <div style={{ cursor:'grab', color:'var(--paper-3)', flexShrink:0, paddingRight:2 }}>
-        <GripVertical size={16}/>
+      <div style={{ cursor: 'grab', color: 'var(--paper-3)', flexShrink: 0, paddingRight: 2 }}>
+        <GripVertical size={16} />
       </div>
 
-
       {/* Info */}
-      <div className="habit-info" style={{ flex:1, minWidth:0 }}>
-        <div className="habit-name">{habit.emoji} {habit.name}</div>
-        <div className="habit-meta">
-          {habit.identity && <span className="habit-identity">"{habit.identity}"</span>}
+      <div className="habit-info" style={{ flex: 1, minWidth: 0 }}>
+        <div className="habit-name" style={{
+          textDecorationLine: success ? 'line-through' : 'none',
+          textDecorationColor: success ? 'var(--paper-3)' : undefined,
+          color: success ? 'var(--ink-muted)' : failed ? 'var(--bad)' : 'var(--ink)',
+        }}>
+          {habit.emoji} {habit.name}
+        </div>
+
+        {/* Failed warning message */}
+        {failed && (
+          <div style={{
+            fontSize: 11, fontWeight: 700,
+            color: 'var(--bad)',
+            marginTop: 3,
+            display: 'flex', alignItems: 'center', gap: 4,
+          }}>
+            <span>⚠</span>
+            <span>
+              {habit.type === 'bad'
+                ? 'You gave in — tomorrow is a new start'
+                : 'Missed today — don\'t break the chain again'}
+            </span>
+          </div>
+        )}
+
+        <div className="habit-meta" style={{ marginTop: failed ? 4 : 3 }}>
+          {habit.identity && !failed && <span className="habit-identity">"{habit.identity}"</span>}
           {streak > 0 && (
             <span className="streak-badge">
-              <Flame size={10}/> {streak}{habit.frequency === 'weekly' ? 'w' : 'd'}
+              <Flame size={10} /> {streak}{habit.frequency === 'weekly' ? 'w' : 'd'}
             </span>
           )}
-          <span style={{ fontSize:11, color:'var(--ink-muted)', fontFamily:'var(--font-mono)' }}>
-            {consistency}%
-          </span>
-          {goalHint && (
-            <span style={{ fontSize:10, color:'var(--ink-muted)' }}>{goalHint}</span>
+          {!failed && (
+            <span style={{ fontSize: 11, color: 'var(--ink-muted)', fontFamily: 'var(--font-mono)' }}>
+              {consistency}%
+            </span>
+          )}
+          {goalHint && !failed && (
+            <span style={{ fontSize: 10, color: 'var(--ink-muted)' }}>{goalHint}</span>
           )}
         </div>
-        {habit.cue && (
-          <div style={{ fontSize:11, color:'var(--ink-muted)', marginTop:2 }}>📍 {habit.cue}</div>
+
+        {habit.cue && !failed && (
+          <div style={{ fontSize: 11, color: 'var(--ink-muted)', marginTop: 2 }}>📍 {habit.cue}</div>
         )}
 
         {/* Inline note */}
         {showNote && (
           <textarea
             style={{
-              marginTop:8, width:'100%', padding:'6px 10px',
-              border:'1px solid var(--paper-3)', borderRadius:'var(--radius)',
-              fontSize:12, fontFamily:'var(--font-ui)', color:'var(--ink)',
-              background:'var(--paper)', resize:'vertical', minHeight:52,
+              marginTop: 8, width: '100%', padding: '6px 10px',
+              border: '1px solid var(--paper-3)', borderRadius: 'var(--radius)',
+              fontSize: 12, fontFamily: 'var(--font-ui)', color: 'var(--ink)',
+              background: 'var(--paper)', resize: 'vertical', minHeight: 52,
             }}
             placeholder="Add a note for today…"
             value={noteText}
             onChange={e => setNoteText(e.target.value)}
-            onBlur={handleNoteBlur}
+            onBlur={() => onNote(noteText)}
+            autoFocus
           />
         )}
       </div>
 
-      {/* Checkbox */}
+      {/* Checkbox / 3-state toggle for non-measured habits */}
       {!habit.isMeasured && isActive && (
-        <div className={`habit-check ${checkClass}`}
-          onClick={isActive ? onToggle : undefined}
-          style={{ cursor: isActive ? 'pointer' : 'default', flexShrink:0 }}
-          title={isActive ? (log?.done ? 'Mark undone' : 'Mark done') : 'Not started yet'}
+        <button
+          onClick={onCycle}
+          title={state === 'pending' ? 'Mark done' : state === 'done' ? 'Mark failed' : 'Clear'}
+          style={{
+            width: 34, height: 34, flexShrink: 0,
+            borderRadius: '50%',
+            border: `2px solid ${s.checkBorder}`,
+            background: s.checkBg,
+            cursor: 'pointer',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            fontSize: 14, fontWeight: 900, color: s.checkColor,
+            transition: 'all 0.18s ease',
+            transform: 'scale(1)',
+            padding: 0,
+          }}
+          onMouseEnter={e => { e.currentTarget.style.transform = 'scale(1.1)' }}
+          onMouseLeave={e => { e.currentTarget.style.transform = 'scale(1)' }}
         >
-          {log?.done && <Check size={14} color="white" strokeWidth={3}/>}
-        </div>
+          {state === 'done' && <span style={{ color: 'white', fontSize: 13, lineHeight: 1 }}>✓</span>}
+          {state === 'failed' && <span style={{ color: 'white', fontSize: 13, lineHeight: 1 }}>✕</span>}
+        </button>
       )}
 
       {/* Measurement input */}
       {habit.isMeasured && isActive && (
         <div className="measurement-input-wrap">
-          <div className={`habit-check ${success ? 'checked' : ''}`} style={{ cursor:'default', flexShrink:0 }}>
-            {success && <Check size={14} color="white" strokeWidth={3}/>}
+          <div style={{
+            width: 28, height: 28, borderRadius: '50%', flexShrink: 0,
+            background: success ? 'var(--good)' : failed ? 'var(--bad)' : 'var(--paper-3)',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            fontSize: 11, color: 'white', fontWeight: 700,
+          }}>
+            {success ? '✓' : failed ? '✕' : ''}
           </div>
           <input className="measurement-input" type="number" min="0" step="0.1"
             value={log?.value ?? ''}
@@ -341,35 +517,24 @@ function HabitRow({ habit, log, streak, consistency, selectedDay, onToggle, onMe
         </div>
       )}
 
-      {habit.isMeasured && !isActive && log?.value != null && (
-        <span style={{ fontSize:12, fontFamily:'var(--font-mono)', color:'var(--ink-muted)' }}>
-          {log.value} {habit.unit}
-        </span>
-      )}
-
       {/* Actions */}
       <div className="habit-actions">
-        <button className="btn btn-ghost btn-icon btn-sm"
+        <button
+          className="btn btn-ghost btn-icon btn-sm"
           onClick={() => setShowNote(s => !s)}
           style={{ color: log?.note ? 'var(--accent)' : undefined }}
-          title="Note">
-          <MessageSquare size={14}/>
+          title="Note"
+        >
+          <MessageSquare size={14} />
         </button>
-        {isActive && !success && (
-          <button className="btn btn-ghost btn-icon btn-sm"
-            onClick={onFail}
-            title="Mark as failed"
-            style={{ color: log?.failed ? 'var(--bad)' : 'var(--ink-muted)' }}>
-            <X size={14}/>
-          </button>
-        )}
-        {/* <button className="btn btn-ghost btn-icon btn-sm" onClick={onEdit} title="Edit">
-          <Pencil size={14}/>
+        <button
+          className="btn btn-ghost btn-icon btn-sm"
+          onClick={() => onEdit()}
+          title="Edit"
+          style={{ color: 'var(--ink-muted)' }}
+        >
+          <ChevronRight size={14} />
         </button>
-        <button className="btn btn-ghost btn-icon btn-sm" onClick={onDelete} title="Delete"
-          style={{ color:'var(--bad)' }}>
-          <Trash2 size={14}/>
-        </button> */}
       </div>
     </div>
   )
