@@ -4,29 +4,29 @@ import { onAuthStateChanged } from 'firebase/auth'
 import { auth } from './firebase'
 // Email/password auth — no Google dependency
 import { subscribeHabits, subscribeLogs, addHabit, updateHabit, deleteHabit, getProfile } from './db'
-import AuthScreen    from './components/AuthScreen'
-import TodayPage     from './components/TodayPage'
-import ProgressPage  from './components/ProgressPage'
-import SettingsPage  from './components/SettingsPage'
-import JournalPage   from './components/JournalPage'
-import HabitModal    from './components/HabitModal'
+import AuthScreen from './components/AuthScreen'
+import TodayPage from './components/TodayPage'
+import ProgressPage from './components/ProgressPage'
+import SettingsPage from './components/SettingsPage'
+import JournalPage from './components/JournalPage'
+import HabitModal from './components/HabitModal'
 import { CalendarCheck, BarChart2, Settings, Plus, BookOpen } from 'lucide-react'
 
 const NAV = [
-  { id: 'today',    label: 'Today',    Icon: CalendarCheck },
+  { id: 'today', label: 'Today', Icon: CalendarCheck },
   { id: 'progress', label: 'Progress', Icon: BarChart2 },
-  { id: 'journal',  label: 'Journal',  Icon: BookOpen },
+  { id: 'journal', label: 'Journal', Icon: BookOpen },
   { id: 'settings', label: 'Settings', Icon: Settings },
 ]
 
 export default function App() {
-  const [user,     setUser]     = useState(undefined)
-  const [page,     setPage]     = useState('today')
-  const [habits,   setHabits]   = useState([])
-  const [logs,     setLogs]     = useState([])
+  const [user, setUser] = useState(undefined)
+  const [page, setPage] = useState('today')
+  const [habits, setHabits] = useState([])
+  const [logs, setLogs] = useState([])
   const [identity, setIdentity] = useState('')
-  const [modal,    setModal]    = useState(null)
-  const [confirm,  setConfirm]  = useState(null)
+  const [modal, setModal] = useState(null)
+  const [confirm, setConfirm] = useState(null)
 
   useEffect(() => onAuthStateChanged(auth, u => setUser(u)), [])
 
@@ -34,7 +34,7 @@ export default function App() {
     if (!user) return
     const unsub1 = subscribeHabits(user.uid, raw => {
       // Sort by order field, then createdAt
-      const sorted = [...raw].sort((a,b) => {
+      const sorted = [...raw].sort((a, b) => {
         if (a.order != null && b.order != null) return a.order - b.order
         if (a.order != null) return -1
         if (b.order != null) return 1
@@ -69,14 +69,14 @@ export default function App() {
   if (user === undefined) {
     return (
       <div className="loading-screen">
-        <div className="spinner"/>
+        <div className="spinner" />
       </div>
     )
   }
 
-  if (!user) return <AuthScreen/>
+  if (!user) return <AuthScreen />
 
-  const pageTitle = { today:'Today', progress:'Progress', journal:'Journal', settings:'Settings' }[page]
+  const pageTitle = { today: 'Today', progress: 'Progress', journal: 'Journal', settings: 'Settings' }[page]
 
   return (
     <div className="app-shell">
@@ -96,19 +96,28 @@ export default function App() {
           <div className="sidebar-section-label">Navigation</div>
           {NAV.map(({ id, label, Icon }) => (
             <div key={id}
-              className={`nav-item ${page===id?'active':''}`}
+              className={`nav-item ${page === id ? 'active' : ''}`}
               onClick={() => setPage(id)}
             >
-              <Icon size={16}/> {label}
-              {id === 'today' && habits.length > 0 && (
-                <span className="nav-badge">{habits.length}</span>
-              )}
+              <Icon size={16} /> {label}
+              {id === 'today' && (() => {
+                const today = new Date().toISOString().slice(0, 10)
+                const activeToday = habits.filter(h => (h.startDate || today) <= today)
+                const loggedToday = logs.filter(l => l.date === today)
+                const untracked = activeToday.filter(h => {
+                  const log = loggedToday.find(l => l.habitId === h.id)
+                  return !log?.done && !log?.failed
+                }).length
+                return untracked > 0
+                  ? <span className="nav-badge">{untracked}</span>
+                  : null
+              })()}
             </div>
           ))}
 
-          <div className="sidebar-section-label" style={{ marginTop:16 }}>Quick add</div>
-          <div className="nav-item" onClick={() => setModal({})} style={{ color:'var(--accent-2)' }}>
-            <Plus size={16}/> New habit
+          <div className="sidebar-section-label" style={{ marginTop: 16 }}>Quick add</div>
+          <div className="nav-item" onClick={() => setModal({})} style={{ color: 'var(--accent-2)' }}>
+            <Plus size={16} /> New habit
           </div>
         </nav>
 
@@ -117,12 +126,12 @@ export default function App() {
             <div className="user-avatar">
               {(user.displayName?.[0] || user.email?.[0] || '?').toUpperCase()}
             </div>
-            <div style={{ minWidth:0 }}>
-              <div style={{ fontSize:12, fontWeight:600, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>
+            <div style={{ minWidth: 0 }}>
+              <div style={{ fontSize: 12, fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                 {user.displayName || user.email || 'Anonymous'}
               </div>
-              <div style={{ fontSize:10, color:'var(--ink-muted)' }}>
-                {habits.length} habit{habits.length!==1?'s':''}
+              <div style={{ fontSize: 10, color: 'var(--ink-muted)' }}>
+                {habits.length} habit{habits.length !== 1 ? 's' : ''}
               </div>
             </div>
           </div>
@@ -135,43 +144,43 @@ export default function App() {
           <div>
             <h1 className="page-title">{pageTitle}</h1>
             <p className="page-subtitle">
-              {page==='today'    && 'Check in on your habits'}
-              {page==='progress' && 'Your consistency over time'}
-              {page==='journal'  && 'Your habit notes & memories'}
-              {page==='settings' && 'Manage habits and account'}
+              {page === 'today' && 'Check in on your habits'}
+              {page === 'progress' && 'Your consistency over time'}
+              {page === 'journal' && 'Your habit notes & memories'}
+              {page === 'settings' && 'Manage habits and account'}
             </p>
           </div>
           {page === 'today' && (
             <button className="btn btn-primary" onClick={() => setModal({})}>
-              <Plus size={15}/> Add habit
+              <Plus size={15} /> Add habit
             </button>
           )}
         </div>
 
         {confirm && (
           <div style={{
-            background:'var(--bad)', color:'white', borderRadius:'var(--radius)',
-            padding:'12px 20px', marginBottom:16, fontSize:13, fontWeight:600,
-            display:'flex', alignItems:'center', justifyContent:'space-between',
+            background: 'var(--bad)', color: 'white', borderRadius: 'var(--radius)',
+            padding: '12px 20px', marginBottom: 16, fontSize: 13, fontWeight: 600,
+            display: 'flex', alignItems: 'center', justifyContent: 'space-between',
           }}>
             <span>Click Delete again to confirm removing "{confirm.name}"</span>
-            <button onClick={() => setConfirm(null)} style={{ background:'none', border:'none', color:'white', cursor:'pointer', fontSize:16 }}>✕</button>
+            <button onClick={() => setConfirm(null)} style={{ background: 'none', border: 'none', color: 'white', cursor: 'pointer', fontSize: 16 }}>✕</button>
           </div>
         )}
 
-        {page==='today' && (
+        {page === 'today' && (
           <TodayPage uid={user.uid} habits={habits} logs={logs}
             identity={identity}
             onEdit={h => setModal({ habit: h })}
-            onDelete={handleDeleteHabit}/>
+            onDelete={handleDeleteHabit} />
         )}
-        {page==='progress' && <ProgressPage habits={habits} logs={logs}/>}
-        {page==='journal'  && <JournalPage  habits={habits} logs={logs}/>}
-        {page==='settings' && (
+        {page === 'progress' && <ProgressPage habits={habits} logs={logs} />}
+        {page === 'journal' && <JournalPage habits={habits} logs={logs} />}
+        {page === 'settings' && (
           <SettingsPage uid={user.uid} user={user} habits={habits}
             onEdit={h => setModal({ habit: h })}
             onDelete={handleDeleteHabit}
-            onIdentityChange={setIdentity}/>
+            onIdentityChange={setIdentity} />
         )}
       </main>
 
@@ -179,19 +188,19 @@ export default function App() {
       <nav className="mobile-nav">
         {NAV.map(({ id, label, Icon }) => (
           <div key={id}
-            className={`mobile-nav-item ${page===id?'active':''}`}
+            className={`mobile-nav-item ${page === id ? 'active' : ''}`}
             onClick={() => setPage(id)}
           >
-            <Icon size={20}/> {label}
+            <Icon size={20} /> {label}
           </div>
         ))}
-        <div className="mobile-nav-item" onClick={() => setModal({})} style={{ color:'var(--accent-2)' }}>
-          <Plus size={20}/> Add
+        <div className="mobile-nav-item" onClick={() => setModal({})} style={{ color: 'var(--accent-2)' }}>
+          <Plus size={20} /> Add
         </div>
       </nav>
 
       {modal && (
-        <HabitModal habit={modal.habit} onSave={handleSaveHabit} onClose={() => setModal(null)}/>
+        <HabitModal habit={modal.habit} onSave={handleSaveHabit} onClose={() => setModal(null)} />
       )}
     </div>
   )

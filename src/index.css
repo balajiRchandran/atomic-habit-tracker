@@ -183,7 +183,23 @@ body {
 @media (max-width: 768px) {
   .sidebar { display: none; }
   .mobile-nav { display: flex; justify-content: space-around; }
-  .main-content { padding-bottom: 80px; }
+  .main-content {
+    padding: 16px 12px;
+    padding-bottom: 90px;
+  }
+}
+
+@media (max-width: 768px) {
+  .habit-row {
+    flex-wrap: wrap;
+    gap: 8px;
+    padding: 12px 14px;
+  }
+  .habit-name { font-size: 13px; }
+  .habit-identity { display: none; }
+  .habit-actions { margin-left: auto; }
+  .measurement-input-wrap { width: 100%; justify-content: flex-end; }
+  .measurement-input { width: 56px; }
 }
 
 .mobile-nav-item {

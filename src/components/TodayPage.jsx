@@ -1,11 +1,11 @@
 // src/components/TodayPage.jsx
 import { useState, useMemo, useRef } from 'react'
 import { format, subDays } from 'date-fns'
-import { Check, Flame, Pencil, Trash2, GripVertical, MessageSquare, ChevronDown, ChevronUp, Star } from 'lucide-react'
+import { Check, Flame, Pencil, Trash2, GripVertical, MessageSquare, ChevronDown, ChevronUp, Star, X } from 'lucide-react'
 import { setLog, updateHabit } from '../db'
 import { dateStr, friendlyDate, computeStreak, computeWeeklyStreak,
          consistencyScore, weeklyConsistencyScore, isSuccess,
-         computePerfectDays, todayStr } from '../utils/dates'
+         computePerfectDays, todayStr, isFailed } from '../utils/dates'
 
 function buildDayStrip() {
   return Array.from({ length: 7 }, (_, i) => {
@@ -52,6 +52,17 @@ export default function TodayPage({ uid, habits, logs, onEdit, onDelete, identit
     const done = !current?.done
     await setLog(uid, habit.id, selectedDay, { done, value: current?.value ?? null, note: current?.note ?? '' })
   }
+
+  const markFailed = async (habit) => {
+  const current = logMap[habit.id]
+  const alreadyFailed = current?.failed
+  await setLog(uid, habit.id, selectedDay, {
+    done: false,
+    value: current?.value ?? null,
+    note: current?.note ?? '',
+    failed: !alreadyFailed,
+  })
+}
 
   const setMeasure = async (habit, value) => {
     const current = logMap[habit.id]
@@ -151,27 +162,16 @@ export default function TodayPage({ uid, habits, logs, onEdit, onDelete, identit
 
       {/* Progress bar */}
       {activeHabits.length > 0 && (
-        <div style={{
-          background: 'white', border: '1px solid var(--paper-3)',
-          borderRadius: 'var(--radius-lg)', padding: '16px 20px',
-          marginBottom: 20, boxShadow: 'var(--shadow)',
-        }}>
-          <div style={{ display:'flex', justifyContent:'space-between', marginBottom:8 }}>
-            <span style={{ fontSize:13, fontWeight:700, color:'var(--ink)' }}>
-              {friendlyDate(new Date(selectedDay + 'T12:00:00'))} — {doneCount} / {activeHabits.length} complete
-              {isPerfect && <span style={{ marginLeft:8, color:'var(--good)' }}>✦ Perfect day!</span>}
-            </span>
-            <span style={{ fontSize:13, fontFamily:'var(--font-mono)', fontWeight:700, color: pct===100 ? 'var(--good)' : 'var(--accent)' }}>
-              {pct}%
-            </span>
-          </div>
-          <div style={{ height:8, background:'var(--paper-2)', borderRadius:4, overflow:'hidden' }}>
-            <div style={{
-              height:'100%', borderRadius:4, transition:'width 0.4s',
-              background: pct===100 ? 'var(--good)' : 'var(--accent)',
-              width: pct + '%',
-            }}/>
-          </div>
+        <div style={{ display: 'flex', gap: 16, marginBottom: 20, flexWrap: 'wrap' }}>
+          {[
+            { label: 'Done', count: activeHabits.filter(h => isSuccess(h, logMap[h.id])).length, color: 'var(--good)' },
+            { label: 'Failed', count: activeHabits.filter(h => isFailed(h, logMap[h.id])).length, color: 'var(--bad)' },
+            { label: 'Pending', count: activeHabits.filter(h => !isSuccess(h, logMap[h.id]) && !isFailed(h, logMap[h.id])).length, color: 'var(--ink-muted)' },
+          ].map(({ label, count, color }) => (
+            <div key={label} style={{ fontSize: 13, fontWeight: 700, color }}>
+              {label}: {count}
+            </div>
+          ))}
         </div>
       )}
 
@@ -196,6 +196,7 @@ export default function TodayPage({ uid, habits, logs, onEdit, onDelete, identit
                 onDragStart={() => handleDragStart(idx)}
                 onDragEnter={() => handleDragEnter(idx)}
                 onDragEnd={handleDragEnd}
+                onFail={() => markFailed(h)}
               />
             ))}
           </div>
@@ -223,6 +224,7 @@ export default function TodayPage({ uid, habits, logs, onEdit, onDelete, identit
                 onDragStart={() => handleDragStart(dailyHabits.length + idx)}
                 onDragEnter={() => handleDragEnter(dailyHabits.length + idx)}
                 onDragEnd={handleDragEnd}
+                onFail={() => markFailed(h)}
               />
             ))}
           </div>
@@ -239,7 +241,7 @@ export default function TodayPage({ uid, habits, logs, onEdit, onDelete, identit
   )
 }
 
-function HabitRow({ habit, log, streak, consistency, selectedDay, onToggle, onMeasure, onNote, onEdit, onDelete, onDragStart, onDragEnter, onDragEnd }) {
+function HabitRow({ habit, log, streak, consistency, selectedDay, onToggle, onMeasure, onNote, onEdit, onDelete, onDragStart, onDragEnter, onDragEnd, onFail }) {
   const [showNote, setShowNote] = useState(false)
   const [noteText, setNoteText] = useState(log?.note || '')
 
@@ -349,11 +351,18 @@ function HabitRow({ habit, log, streak, consistency, selectedDay, onToggle, onMe
       <div className="habit-actions">
         <button className="btn btn-ghost btn-icon btn-sm"
           onClick={() => setShowNote(s => !s)}
-          title="Note"
           style={{ color: log?.note ? 'var(--accent)' : undefined }}
-        >
+          title="Note">
           <MessageSquare size={14}/>
         </button>
+        {isActive && !success && (
+          <button className="btn btn-ghost btn-icon btn-sm"
+            onClick={onFail}
+            title="Mark as failed"
+            style={{ color: log?.failed ? 'var(--bad)' : 'var(--ink-muted)' }}>
+            <X size={14}/>
+          </button>
+        )}
         {/* <button className="btn btn-ghost btn-icon btn-sm" onClick={onEdit} title="Edit">
           <Pencil size={14}/>
         </button>

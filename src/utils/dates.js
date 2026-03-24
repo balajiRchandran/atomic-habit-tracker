@@ -37,6 +37,19 @@ export const isSuccess = (habit, log) => {
   return direction === 'atleast' ? Number(val) >= goal : Number(val) <= goal
 }
 
+export const isFailed = (habit, log) => {
+  if (!log) return false
+  if (log.failed) return true  // explicit failed flag
+  if (!habit.isMeasured) return false
+  // measured: logged a value but didn't meet goal = failed
+  const val = log.value
+  if (val == null || val === '') return false
+  const goal = habit.goal
+  if (goal == null) return false
+  const direction = habit.goalDirection || 'atleast'
+  return direction === 'atleast' ? Number(val) < goal : Number(val) > goal
+}
+
 // ── Daily streak (for daily habits) ─────────────────────────
 export const computeStreak = (habit, logs) => {
   const logMap = {}
